@@ -1,6 +1,6 @@
 import tkinter as tk
-import time
-import json
+import time, datetime
+import json, os, sys
 
 class SplitTimerApp:
     def __init__(self, root, splits):
@@ -28,11 +28,19 @@ class SplitTimerApp:
             time_lbl.grid(row=i+1, column=1, padx=10, pady=5)
             self.time_labels.append(time_lbl)
 
-        self.next_btn = tk.Button(root, text="Start Split", command=self.next_split, font=("Arial", 14))
-        self.next_btn.grid(row=len(splits)+1, column=0, columnspan=2, pady=10)
-        
-        self.pause_btn = tk.Button(root, text="Pause", command=self.pause_timer, font=("Arial", 14))
-        self.pause_btn.grid(row=len(splits)+2, column=0, columnspan=2, pady=5)
+        # Place buttons side by side in a new frame
+        btn_frame = tk.Frame(root)
+        btn_frame.grid(row=len(splits)+1, column=0, columnspan=2, pady=10)
+
+        self.next_btn = tk.Button(btn_frame, text="Start", command=self.next_split, font=("Arial", 14))
+        self.next_btn.pack(side=tk.LEFT, padx=5)
+
+        self.pause_btn = tk.Button(btn_frame, text="Pause", command=self.pause_timer, font=("Arial", 14))
+        self.pause_btn.pack(side=tk.LEFT, padx=5)
+
+        self.reset_btn = tk.Button(btn_frame, text="Reset", command=self.reset_timers, font=("Arial", 14))
+        self.reset_btn.pack(side=tk.LEFT, padx=5)
+
 
         self.update_timer()
 
@@ -70,10 +78,10 @@ class SplitTimerApp:
     def update_timer(self):
         if self.start_time is not None and self.current_split is not None and self.current_split < len(self.splits):
             elapsed = time.time() - self.start_time + self.split_times[self.current_split]
-            self.time_labels[self.current_split].config(text=f"{self.format_mmss(elapsed)} (running)")
+            self.time_labels[self.current_split].config(text=f"{self.format_mmss(elapsed)}")
             # Calculate running total including current split
             running_total = sum(self.split_times) - self.split_times[self.current_split] + elapsed
-            self.total_label.config(text=f"Total: {self.format_mmss(running_total)} (running)")
+            self.total_label.config(text=f"Total: {self.format_mmss(running_total)}")
         else:
             self.total_label.config(text=f"Total: {self.format_mmss(sum(self.split_times))}")
         self.root.after(100, self.update_timer)
@@ -84,19 +92,76 @@ class SplitTimerApp:
             self.split_times[self.current_split] += elapsed
             self.time_labels[self.current_split].config(text=self.format_mmss(self.split_times[self.current_split]))
             self.start_time = None  # Stop timing
+            
+    def reset_timers(self):
+        self.split_times = [0.0] * len(self.splits)
+        self.current_split = None
+        self.start_time = None
+        self.total_time = 0.0
+        for lbl in self.time_labels:
+            lbl.config(text="00:00.0")
+        self.total_label.config(text="Total: 00:00.0")
+        self.next_btn.config(state=tk.NORMAL, text="Start")
+
     
     def format_mmss(self, seconds):
         minutes = int(seconds // 60)
         secs = int(seconds % 60)
         millis = int((seconds - int(seconds)) * 10)
         return f"{minutes:02}:{secs:02}.{millis}"
+    
+    def export_times(self):
+        # Prepare data for export
+        export_data = {
+            "title": self.root.title(),
+            "splits": [
+                {
+                    "label": label.cget("text").rstrip(":"),  # Remove trailing colon
+                    "time": self.format_mmss(self.split_times[i])
+                }
+                for i, label in enumerate(self.labels)
+            ],
+            "total": self.format_mmss(sum(self.split_times))
+        }
+
+        # Create filename with current date/time and window title
+        now = datetime.datetime.now()
+        safe_title = self.root.title().replace(" ", "-")
+        filename = now.strftime(f"%Y-%m-%d-%H-%M {safe_title}.json")
+
+        # Save to the same folder as the EXE
+        folder = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.abspath("."))
+        filepath = os.path.join(folder, filename)
+        with open(filepath, "w") as f:
+            json.dump(export_data, f, indent=2)
+        print(f"Exported to {filepath}")
+        
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS  # PyInstaller sets this attr
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 if __name__ == "__main__":
-    with open("order.json","r") as f:
+    
+    order_path = resource_path("order.json")
+    with open(order_path,"r") as f:
         splits_data = json.load(f)
     splits = [split['name'] for split in splits_data['splits']]
     root = tk.Tk()
     root.title(splits_data['name'])
     root.attributes("-topmost", True)  # Keep the window on top
     app = SplitTimerApp(root, splits)
+    
+    # Custom exit handler
+    def on_exit():
+        # You can add any cleanup or confirmation here
+        print("Exporting times...")
+        app.export_times()
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", on_exit)
+    
     root.mainloop()
