@@ -1,0 +1,11 @@
+{
+    "name":"Stand Up Timer",
+    "splits":[
+        {
+            "name":"A Name"
+        },
+        {
+            "name":"Another Name"
+        }
+    ]
+}
