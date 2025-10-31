@@ -3,7 +3,7 @@ import time, datetime
 import json, os, sys
 
 class SplitTimerApp:
-    def __init__(self, root, splits):
+    def __init__(self, root, splits, split_warning_threshold=None, split_bad_threshold=None):
         self.root = root
         self.splits = splits
         self.split_times = [0.0] * len(splits)
@@ -13,7 +13,11 @@ class SplitTimerApp:
 
         self.labels = []
         self.time_labels = []
-        
+        self.split_warning_threshold = split_warning_threshold if split_warning_threshold is not None else 90.0
+        self.split_bad_threshold = split_bad_threshold if split_bad_threshold is not None else 150.0
+        self.normal_fg = "black"
+        self.warning_fg = "blue"
+        self.bad_fg = "red"
         self.total_label = tk.Label(root, text="Total: 00:00.0", font=("Arial", 16, "bold"))
         self.total_label.grid(row=0, column=0, columnspan=2, pady=10)
 
@@ -27,6 +31,8 @@ class SplitTimerApp:
             time_lbl = tk.Label(root, text="00:00.0", font=("Arial", 14))
             time_lbl.grid(row=i+1, column=1, padx=10, pady=5)
             self.time_labels.append(time_lbl)
+            if i == 0:
+                self.normal_fg = time_lbl.cget("fg")
 
         # Place buttons side by side in a new frame
         btn_frame = tk.Frame(root)
@@ -54,6 +60,8 @@ class SplitTimerApp:
             elapsed = now - self.start_time
             self.split_times[self.current_split] += elapsed  # Use +=
             self.time_labels[self.current_split].config(text=self.format_mmss(self.split_times[self.current_split]))
+            # apply color based on threshold
+            self._apply_color(self.current_split, self.split_times[self.current_split])
             self.total_time = sum(self.split_times)
             self.total_label.config(text=f"Total: {self.format_mmss(self.total_time)}")
             self.current_split += 1
@@ -79,11 +87,16 @@ class SplitTimerApp:
         if self.start_time is not None and self.current_split is not None and self.current_split < len(self.splits):
             elapsed = time.time() - self.start_time + self.split_times[self.current_split]
             self.time_labels[self.current_split].config(text=f"{self.format_mmss(elapsed)}")
+            # update color for running split
+            self._apply_color(self.current_split, elapsed)
             # Calculate running total including current split
             running_total = sum(self.split_times) - self.split_times[self.current_split] + elapsed
             self.total_label.config(text=f"Total: {self.format_mmss(running_total)}")
         else:
             self.total_label.config(text=f"Total: {self.format_mmss(sum(self.split_times))}")
+            # ensure completed splits' colors are correct
+            for i, t in enumerate(self.split_times):
+                self._apply_color(i, t)
         self.root.after(100, self.update_timer)
         
     def pause_timer(self):
@@ -91,6 +104,7 @@ class SplitTimerApp:
             elapsed = time.time() - self.start_time
             self.split_times[self.current_split] += elapsed
             self.time_labels[self.current_split].config(text=self.format_mmss(self.split_times[self.current_split]))
+            self._apply_color(self.current_split, self.split_times[self.current_split])
             self.start_time = None  # Stop timing
             
     def reset_timers(self):
@@ -99,10 +113,28 @@ class SplitTimerApp:
         self.start_time = None
         self.total_time = 0.0
         for lbl in self.time_labels:
-            lbl.config(text="00:00.0")
+            lbl.config(text="00:00.0", fg=self.normal_fg)
         self.total_label.config(text="Total: 00:00.0")
         self.next_btn.config(state=tk.NORMAL, text="Start")
 
+    def _apply_color(self, idx, seconds):
+        """Set time label color to red if seconds > threshold for that split."""
+        try:
+            warning_thresh = self.split_warning_threshold
+            bad_thresh = self.split_bad_threshold
+        except Exception:
+            bad_thresh = None
+            warning_thresh = None
+        if bad_thresh is not None and seconds > bad_thresh:
+            color = self.bad_fg
+        elif warning_thresh is not None and seconds > warning_thresh:
+            color = self.warning_fg
+        else:
+            color = self.normal_fg
+        
+            
+        # color = "red" if (thresh is not None and seconds > bad_threshold) else self.normal_fg
+        self.time_labels[idx].config(fg=color)
     
     def format_mmss(self, seconds):
         minutes = int(seconds // 60)
@@ -152,8 +184,10 @@ if __name__ == "__main__":
     splits = [split['name'] for split in splits_data['splits']]
     root = tk.Tk()
     root.title(splits_data['name'])
+    split_warning_thresh = splits_data['split_warning_thresh']
+    split_bad_thresh = splits_data['split_bad_thresh']
     root.attributes("-topmost", True)  # Keep the window on top
-    app = SplitTimerApp(root, splits)
+    app = SplitTimerApp(root=root, splits=splits, split_warning_threshold=split_warning_thresh, split_bad_threshold=split_bad_thresh)
     
     # Custom exit handler
     def on_exit():
