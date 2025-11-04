@@ -1,3 +1,20 @@
 order.json
 2025-08-26-11-26 Stand-Up-Timer.json
 *.json
+Pipfile.lock
+timer.spec
+build/timer/Analysis-00.toc
+build/timer/base_library.zip
+build/timer/EXE-00.toc
+build/timer/PKG-00.toc
+build/timer/PYZ-00.pyz
+build/timer/PYZ-00.toc
+build/timer/timer.pkg
+build/timer/warn-timer.txt
+build/timer/xref-timer.html
+build/timer/localpycs/pyimod01_archive.pyc
+build/timer/localpycs/pyimod02_importers.pyc
+build/timer/localpycs/pyimod03_ctypes.pyc
+build/timer/localpycs/pyimod04_pywin32.pyc
+build/timer/localpycs/struct.pyc
+dist/timer.exe

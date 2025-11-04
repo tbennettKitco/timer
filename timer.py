@@ -1,6 +1,10 @@
 import tkinter as tk
 import time, datetime
 import json, os, sys
+try:
+    import winsound
+except Exception:
+    winsound = None
 
 class SplitTimerApp:
     def __init__(self, root, splits, split_warning_threshold=None, split_bad_threshold=None):
@@ -20,7 +24,8 @@ class SplitTimerApp:
         self.bad_fg = "red"
         self.total_label = tk.Label(root, text="Total: 00:00.0", font=("Arial", 16, "bold"))
         self.total_label.grid(row=0, column=0, columnspan=2, pady=10)
-
+        self.split_state = None
+        
         for i, split in enumerate(splits):
             lbl = tk.Label(root, text=f"{split}:", font=("Arial", 14))
             lbl.grid(row=i+1, column=0, padx=10, pady=5)
@@ -33,6 +38,7 @@ class SplitTimerApp:
             self.time_labels.append(time_lbl)
             if i == 0:
                 self.normal_fg = time_lbl.cget("fg")
+        self.split_state = ['normal'] * len(splits)
 
         # Place buttons side by side in a new frame
         btn_frame = tk.Frame(root)
@@ -116,6 +122,8 @@ class SplitTimerApp:
             lbl.config(text="00:00.0", fg=self.normal_fg)
         self.total_label.config(text="Total: 00:00.0")
         self.next_btn.config(state=tk.NORMAL, text="Start")
+        # reset sound/color state tracking
+        self.split_state = ['normal'] * len(self.splits)
 
     def _apply_color(self, idx, seconds):
         """Set time label color to red if seconds > threshold for that split."""
@@ -127,15 +135,31 @@ class SplitTimerApp:
             warning_thresh = None
         if bad_thresh is not None and seconds > bad_thresh:
             color = self.bad_fg
+            new_state = 'bad'
         elif warning_thresh is not None and seconds > warning_thresh:
             color = self.warning_fg
+            new_state = 'warning'
         else:
             color = self.normal_fg
+            new_state = 'normal'
         
+        current_color = self.time_labels[idx]
             
         # color = "red" if (thresh is not None and seconds > bad_threshold) else self.normal_fg
         self.time_labels[idx].config(fg=color)
-    
+        
+        # play a windows sound once when state transitions to warning or bad.
+        if self.split_state[idx] != new_state:
+            self.split_state[idx] = new_state
+            if winsound is not None:
+                if new_state == 'warning':
+                    winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS | winsound.SND_ASYNC)
+                elif new_state == 'bad':
+                     winsound.PlaySound("SystemHand", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            else:
+                # No sound availible.
+                pass
+            
     def format_mmss(self, seconds):
         minutes = int(seconds // 60)
         secs = int(seconds % 60)
@@ -188,7 +212,11 @@ if __name__ == "__main__":
     split_bad_thresh = splits_data['split_bad_thresh']
     root.attributes("-topmost", True)  # Keep the window on top
     app = SplitTimerApp(root=root, splits=splits, split_warning_threshold=split_warning_thresh, split_bad_threshold=split_bad_thresh)
-    
+    # Make the window start 5 px wider than its calculated size
+    root.update_idletasks()
+    w = root.winfo_width()
+    h = root.winfo_height()
+    root.geometry(f"{w+5}x{h}")
     # Custom exit handler
     def on_exit():
         # You can add any cleanup or confirmation here
